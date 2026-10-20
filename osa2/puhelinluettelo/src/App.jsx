@@ -2,12 +2,22 @@ import { useState, useEffect } from 'react'
 import personService from './services/persons'
 
 const Notification = ({ message, type }) => {
-  if (message === null) {
+  if (!message) {
     return null
   }
 
+  const notificationStyle = {
+    color: type === 'error' ? 'red' : 'green',
+    background: 'lightgrey',
+    fontSize: 20,
+    borderStyle: 'solid',
+    borderRadius: 5,
+    padding: 10,
+    marginBottom: 10
+  }
+
   return (
-    <div className={`notification ${type}`}>
+    <div style={notificationStyle}>
       {message}
     </div>
   )
@@ -15,45 +25,33 @@ const Notification = ({ message, type }) => {
 
 const Filter = ({ filter, handleFilterChange }) => (
   <div>
-    filter shown with <input value={filter} onChange={handleFilterChange} />
+    rajaa näytettäviä: <input value={filter} onChange={handleFilterChange} />
   </div>
 )
 
-const PersonForm = ({
-  addPerson,
-  newName,
-  handleNameChange,
-  newNumber,
-  handleNumberChange
-}) => (
+const PersonForm = ({ addPerson, newName, handleNameChange, newNumber, handleNumberChange }) => (
   <form onSubmit={addPerson}>
     <div>
-      name: <input value={newName} onChange={handleNameChange} />
+      nimi: <input value={newName} onChange={handleNameChange} />
     </div>
     <div>
-      number: <input value={newNumber} onChange={handleNumberChange} />
+      numero: <input value={newNumber} onChange={handleNumberChange} />
     </div>
     <div>
-      <button type="submit">add</button>
+      <button type="submit">lisää</button>
     </div>
   </form>
 )
 
-const PersonDetails = ({ person, handleDelete }) => (
-  <p>
-    {person.name} {person.number}{' '}
-    <button onClick={() => handleDelete(person.id, person.name)}>delete</button>
-  </p>
-)
-
-const Persons = ({ personsToShow, handleDelete }) => (
+const Persons = ({ personsToShow, deletePerson }) => (
   <div>
     {personsToShow.map(person => (
-      <PersonDetails
-        key={person.id}
-        person={person}
-        handleDelete={handleDelete}
-      />
+      <div key={person.id}>
+        {person.name} {person.number}{' '}
+        <button onClick={() => deletePerson(person.id, person.name)}>
+          poista
+        </button>
+      </div>
     ))}
   </div>
 )
@@ -63,7 +61,7 @@ const App = () => {
   const [newName, setNewName] = useState('')
   const [newNumber, setNewNumber] = useState('')
   const [filter, setFilter] = useState('')
-  const [notification, setNotification] = useState({ message: null, type: '' })
+  const [notification, setNotification] = useState({ message: null, type: null })
 
   useEffect(() => {
     personService
@@ -71,12 +69,15 @@ const App = () => {
       .then(initialPersons => {
         setPersons(initialPersons)
       })
+      .catch(error => {
+        showNotification('Tietojen haku palvelimelta epäonnistui', 'error')
+      })
   }, [])
 
   const showNotification = (message, type = 'success') => {
     setNotification({ message, type })
     setTimeout(() => {
-      setNotification({ message: null, type: '' })
+      setNotification({ message: null, type: null })
     }, 5000)
   }
 
@@ -86,35 +87,34 @@ const App = () => {
 
   const addPerson = (event) => {
     event.preventDefault()
-
-    const existingPerson = persons.find(
-      p => p.name.trim().toLowerCase() === newName.trim().toLowerCase()
-    )
+    const existingPerson = persons.find(p => p.name === newName)
 
     if (existingPerson) {
       const confirmUpdate = window.confirm(
-        `${existingPerson.name} is already added to phonebook, replace the old number with a new one?`
+        `${newName} on jo luettelossa, korvataanko vanha numero uudella?`
       )
 
       if (confirmUpdate) {
-        const changedPerson = { ...existingPerson, number: newNumber }
+        const updatedObject = { ...existingPerson, number: newNumber }
 
         personService
-          .update(existingPerson.id, changedPerson)
+          .update(existingPerson.id, updatedObject)
           .then(returnedPerson => {
-            setPersons(
-              persons.map(p => (p.id !== existingPerson.id ? p : returnedPerson))
-            )
+            setPersons(persons.map(p => p.id !== existingPerson.id ? p : returnedPerson))
             setNewName('')
             setNewNumber('')
-            showNotification(`Updated ${returnedPerson.name}'s number`, 'success')
+            showNotification(`Päivitettiin numero henkilölle ${returnedPerson.name}`, 'success')
           })
           .catch(error => {
-            showNotification(
-              `Information of ${existingPerson.name} has already been removed from server`,
-              'error'
-            )
-            setPersons(persons.filter(p => p.id !== existingPerson.id))
+            if (error.response && error.response.data && error.response.data.error) {
+              showNotification(error.response.data.error, 'error')
+            } else {
+              showNotification(
+                `Henkilö '${existingPerson.name}' oli jo poistettu palvelimelta`,
+                'error'
+              )
+              setPersons(persons.filter(p => p.id !== existingPerson.id))
+            }
           })
       }
       return
@@ -131,22 +131,28 @@ const App = () => {
         setPersons(persons.concat(returnedPerson))
         setNewName('')
         setNewNumber('')
-        showNotification(`Added ${returnedPerson.name}`, 'success')
+        showNotification(`Lisättiin ${returnedPerson.name}`, 'success')
+      })
+      .catch(error => {
+        if (error.response && error.response.data && error.response.data.error) {
+          showNotification(error.response.data.error, 'error')
+        } else {
+          showNotification('Lisäys epäonnistui odottamattoman virheen vuoksi', 'error')
+        }
       })
   }
 
-  // Henkilön poisto
-  const handleDeletePerson = (id, name) => {
-    if (window.confirm(`Delete ${name} ?`)) {
+  const deletePerson = (id, name) => {
+    if (window.confirm(`Poistetaanko ${name}?`)) {
       personService
         .remove(id)
         .then(() => {
           setPersons(persons.filter(p => p.id !== id))
-          showNotification(`Deleted ${name}`, 'success')
+          showNotification(`Poistettiin ${name}`, 'success')
         })
         .catch(error => {
           showNotification(
-            `Information of ${name} has already been removed from server`,
+            `Henkilö '${name}' oli jo valmiiksi poistettu palvelimelta`,
             'error'
           )
           setPersons(persons.filter(p => p.id !== id))
@@ -154,17 +160,20 @@ const App = () => {
     }
   }
 
-  const personsToShow = persons.filter(person =>
-    person.name.toLowerCase().includes(filter.toLowerCase())
-  )
+  const personsToShow = filter
+    ? persons.filter(person =>
+        person.name.toLowerCase().includes(filter.toLowerCase())
+      )
+    : persons
 
   return (
     <div>
-      <h2>Phonebook</h2>
+      <h2>Puhelinluettelo</h2>
       <Notification message={notification.message} type={notification.type} />
+      
       <Filter filter={filter} handleFilterChange={handleFilterChange} />
 
-      <h3>Add a new</h3>
+      <h3>Lisää uusi</h3>
       <PersonForm
         addPerson={addPerson}
         newName={newName}
@@ -173,8 +182,8 @@ const App = () => {
         handleNumberChange={handleNumberChange}
       />
 
-      <h3>Numbers</h3>
-      <Persons personsToShow={personsToShow} handleDelete={handleDeletePerson} />
+      <h3>Numerot</h3>
+      <Persons personsToShow={personsToShow} deletePerson={deletePerson} />
     </div>
   )
 }
