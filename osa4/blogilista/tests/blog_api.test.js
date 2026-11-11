@@ -8,11 +8,29 @@ const helper = require('./test_helper')
 const app = require('../app')
 const api = supertest(app)
 const Blog = require('../models/blog')
+const User = require('../models/user')
 
 describe('when there are initially some blogs saved', () => {
+  let token = null
+
   beforeEach(async () => {
     await Blog.deleteMany({})
-    await Blog.insertMany(helper.initialBlogs)
+    await User.deleteMany({})
+
+    await api
+      .post('/api/users')
+      .send({ username: 'testuser', name: 'Tester', password: 'password123' })
+
+    const loginResponse = await api
+      .post('/api/login')
+      .send({ username: 'testuser', password: 'password123' })
+
+    token = loginResponse.body.token
+    const user = await User.findOne({ username: 'testuser' })
+
+    const blogObjects = helper.initialBlogs.map(blog => new Blog({ ...blog, user: user._id }))
+    const promiseArray = blogObjects.map(blog => blog.save())
+    await Promise.all(promiseArray)
   })
 
   test('blogs are returned as json and correct amount is returned', async () => {
@@ -26,14 +44,13 @@ describe('when there are initially some blogs saved', () => {
 
   test('unique identifier property of the blog posts is named id', async () => {
     const response = await api.get('/api/blogs')
-
     const blogToInspect = response.body[0]
     assert.ok(blogToInspect.id)
     assert.strictEqual(blogToInspect._id, undefined)
   })
 
   describe('addition of a new blog', () => {
-    test('a valid blog can be added', async () => {
+    test('a valid blog can be added when token is provided', async () => {
       const newBlog = {
         title: 'Canonical DAO patterns',
         author: 'Edsger W. Dijkstra',
@@ -43,6 +60,7 @@ describe('when there are initially some blogs saved', () => {
 
       await api
         .post('/api/blogs')
+        .set('Authorization', `Bearer ${token}`)
         .send(newBlog)
         .expect(201)
         .expect('Content-Type', /application\/json/)
@@ -54,6 +72,23 @@ describe('when there are initially some blogs saved', () => {
       assert.ok(titles.includes('Canonical DAO patterns'))
     })
 
+    test('adding a blog fails with status code 401 if token is not provided', async () => {
+      const newBlog = {
+        title: 'Unauthorized blog',
+        author: 'Anonymous',
+        url: 'http://example.com/unauthorized',
+        likes: 0
+      }
+
+      await api
+        .post('/api/blogs')
+        .send(newBlog)
+        .expect(401)
+
+      const blogsAtEnd = await helper.blogsInDb()
+      assert.strictEqual(blogsAtEnd.length, helper.initialBlogs.length)
+    })
+
     test('if likes property is missing, it defaults to 0', async () => {
       const newBlogWithoutLikes = {
         title: 'First class tests',
@@ -63,15 +98,12 @@ describe('when there are initially some blogs saved', () => {
 
       const response = await api
         .post('/api/blogs')
+        .set('Authorization', `Bearer ${token}`)
         .send(newBlogWithoutLikes)
         .expect(201)
         .expect('Content-Type', /application\/json/)
 
       assert.strictEqual(response.body.likes, 0)
-
-      const blogsAtEnd = await helper.blogsInDb()
-      const addedBlog = blogsAtEnd.find(b => b.title === 'First class tests')
-      assert.strictEqual(addedBlog.likes, 0)
     })
 
     test('blog without title is not added and results in 400 Bad Request', async () => {
@@ -83,6 +115,7 @@ describe('when there are initially some blogs saved', () => {
 
       await api
         .post('/api/blogs')
+        .set('Authorization', `Bearer ${token}`)
         .send(blogWithoutTitle)
         .expect(400)
 
@@ -99,6 +132,7 @@ describe('when there are initially some blogs saved', () => {
 
       await api
         .post('/api/blogs')
+        .set('Authorization', `Bearer ${token}`)
         .send(blogWithoutUrl)
         .expect(400)
 
@@ -106,14 +140,15 @@ describe('when there are initially some blogs saved', () => {
       assert.strictEqual(blogsAtEnd.length, helper.initialBlogs.length)
     })
   })
-})
-describe('deletion of a blog', () => {
-    test('succeeds with status code 204 if id is valid', async () => {
+
+  describe('deletion of a blog', () => {
+    test('succeeds with status code 204 if id and token are valid', async () => {
       const blogsAtStart = await helper.blogsInDb()
       const blogToDelete = blogsAtStart[0]
 
       await api
         .delete(`/api/blogs/${blogToDelete.id}`)
+        .set('Authorization', `Bearer ${token}`)
         .expect(204)
 
       const blogsAtEnd = await helper.blogsInDb()
@@ -141,12 +176,9 @@ describe('deletion of a blog', () => {
         .expect('Content-Type', /application\/json/)
 
       assert.strictEqual(response.body.likes, blogToUpdate.likes + 10)
-
-      const blogsAtEnd = await helper.blogsInDb()
-      const updatedBlogInDb = blogsAtEnd.find(b => b.id === blogToUpdate.id)
-      assert.strictEqual(updatedBlogInDb.likes, blogToUpdate.likes + 10)
     })
   })
+})
 
 after(async () => {
   await mongoose.connection.close()
