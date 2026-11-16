@@ -11,3 +11,12 @@ Content-Type: application/json
   "url": "https://reactpatterns.com/",
   "likes": 7
 }
+### Luo uusi käyttäjä 
+POST http://localhost:3003/api/users
+Content-Type: application/json
+
+{
+  "username": "testi",
+  "name": "Testi Kayttaja",
+  "password": "salasana123"
+}
