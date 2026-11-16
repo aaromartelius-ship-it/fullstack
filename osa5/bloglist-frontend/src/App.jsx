@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Blog from './components/Blog'
 import Notification from './components/Notification'
+import Togglable from './components/Togglable'
+import BlogForm from './components/BlogForm'
 import blogService from './services/blogs'
 import loginService from './services/login'
 
@@ -9,10 +11,9 @@ const App = () => {
   const [user, setUser] = useState(null)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [title, setTitle] = useState('')
-  const [author, setAuthor] = useState('')
-  const [url, setUrl] = useState('')
   const [notification, setNotification] = useState(null)
+
+  const blogFormRef = useRef()
 
   useEffect(() => {
     blogService.getAll().then(blogs =>
@@ -20,7 +21,6 @@ const App = () => {
     )
   }, [])
 
-  // 5.2: Tarkistetaan sivun latautuessa onko käyttäjä tallennettuna localStorageen
   useEffect(() => {
     const loggedUserJSON = window.localStorage.getItem('loggedBlogappUser')
     if (loggedUserJSON) {
@@ -37,12 +37,10 @@ const App = () => {
     }, 5000)
   }
 
-  // 5.1 & 5.2: Kirjautuminen
   const handleLogin = async (event) => {
     event.preventDefault()
     try {
       const user = await loginService.login({ username, password })
-
       window.localStorage.setItem('loggedBlogappUser', JSON.stringify(user))
       blogService.setToken(user.token)
       setUser(user)
@@ -54,7 +52,6 @@ const App = () => {
     }
   }
 
-  // 5.2: Uloskirjautuminen
   const handleLogout = () => {
     window.localStorage.removeItem('loggedBlogappUser')
     setUser(null)
@@ -62,27 +59,55 @@ const App = () => {
     notify('logged out')
   }
 
-  // 5.3: Blogin luonti
-  const handleCreateBlog = async (event) => {
-    event.preventDefault()
+  const addBlog = async (blogObject) => {
     try {
-      const newBlog = await blogService.create({
-        title,
-        author,
-        url,
-      })
+      const returnedBlog = await blogService.create(blogObject)
+      const blogWithUser = returnedBlog.user && typeof returnedBlog.user === 'object'
+        ? returnedBlog
+        : { ...returnedBlog, user: { username: user.username, name: user.name, id: returnedBlog.user } }
 
-      setBlogs(blogs.concat(newBlog))
-      notify(`a new blog '${newBlog.title}' by ${newBlog.author} added`)
-      setTitle('')
-      setAuthor('')
-      setUrl('')
+      setBlogs(blogs.concat(blogWithUser))
+      blogFormRef.current.toggleVisibility()
+      notify(`a new blog '${returnedBlog.title}' by ${returnedBlog.author} added`)
     } catch {
       notify('failed to create blog: missing title or url', 'error')
     }
   }
 
-  // Jos käyttäjä ei ole kirjautunut, näytetään pelkkä kirjautumislomake
+  const handleLike = async (blog) => {
+    try {
+      const updatedBlogData = {
+        user: blog.user ? (blog.user.id || blog.user._id || blog.user) : null,
+        likes: blog.likes + 1,
+        author: blog.author,
+        title: blog.title,
+        url: blog.url
+      }
+
+      const returnedBlog = await blogService.update(blog.id, updatedBlogData)
+      const blogWithUser = {
+        ...returnedBlog,
+        user: blog.user
+      }
+
+      setBlogs(blogs.map(b => (b.id === blog.id ? blogWithUser : b)))
+    } catch {
+      notify('failed to update likes', 'error')
+    }
+  }
+
+  const handleDelete = async (blog) => {
+    if (window.confirm(`Remove blog ${blog.title} by ${blog.author}?`)) {
+      try {
+        await blogService.remove(blog.id)
+        setBlogs(blogs.filter(b => b.id !== blog.id))
+        notify(`Removed ${blog.title}`)
+      } catch {
+        notify('failed to delete blog', 'error')
+      }
+    }
+  }
+
   if (user === null) {
     return (
       <div>
@@ -113,7 +138,8 @@ const App = () => {
     )
   }
 
-  // Kirjautunut näkymä
+  const sortedBlogs = [...blogs].sort((a, b) => b.likes - a.likes)
+
   return (
     <div>
       <h2>blogs</h2>
@@ -122,41 +148,19 @@ const App = () => {
         {user.name} logged in <button onClick={handleLogout}>logout</button>
       </p>
 
-      <h2>create new</h2>
-      <form onSubmit={handleCreateBlog}>
-        <div>
-          title:
-          <input
-            type="text"
-            value={title}
-            name="Title"
-            onChange={({ target }) => setTitle(target.value)}
-          />
-        </div>
-        <div>
-          author:
-          <input
-            type="text"
-            value={author}
-            name="Author"
-            onChange={({ target }) => setAuthor(target.value)}
-          />
-        </div>
-        <div>
-          url:
-          <input
-            type="text"
-            value={url}
-            name="Url"
-            onChange={({ target }) => setUrl(target.value)}
-          />
-        </div>
-        <button type="submit">create</button>
-      </form>
+      <Togglable buttonLabel="create new blog" ref={blogFormRef}>
+        <BlogForm createBlog={addBlog} />
+      </Togglable>
 
       <div style={{ marginTop: 20 }}>
-        {blogs.map(blog =>
-          <Blog key={blog.id} blog={blog} />
+        {sortedBlogs.map(blog =>
+          <Blog
+            key={blog.id}
+            blog={blog}
+            currentUser={user}
+            handleDelete={handleDelete}
+            handleLike={handleLike}
+          />
         )}
       </div>
     </div>
