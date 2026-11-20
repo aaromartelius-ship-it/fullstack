@@ -1,57 +1,65 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import Blog from './Blog'
 
 describe('<Blog />', () => {
   const sampleBlog = {
+    id: '12345',
     title: 'Component testing is done with react-testing-library',
     author: 'Test Author',
     url: 'https://example.com/testing',
     likes: 5,
     user: {
-      username: 'testuser',
-      name: 'Test User'
+      username: 'creatoruser',
+      name: 'Creator User'
     }
   }
 
-  test('5.13: renders title and author by default, but not url or likes', () => {
-    render(<Blog blog={sampleBlog} />)
+  test('renders blog details and likes for unauthenticated user, without any buttons', () => {
+    render(
+      <MemoryRouter>
+        <Blog blog={sampleBlog} currentUser={null} />
+      </MemoryRouter>
+    )
 
-    const titleAndAuthor = screen.getByText('Component testing is done with react-testing-library Test Author')
-    expect(titleAndAuthor).toBeDefined()
-
-    const urlElement = screen.queryByText('https://example.com/testing')
-    expect(urlElement).toBeNull()
-
-    const likesElement = screen.queryByText('likes 5')
-    expect(likesElement).toBeNull()
-  })
-
-  test('5.14: renders url, likes and user name when view button is clicked', async () => {
-    render(<Blog blog={sampleBlog} />)
-
-    const user = userEvent.setup()
-    const viewButton = screen.getByText('view')
-    await user.click(viewButton)
-
+    expect(screen.getByText('Component testing is done with react-testing-library Test Author')).toBeDefined()
     expect(screen.getByText('https://example.com/testing')).toBeDefined()
     expect(screen.getByText(/likes 5/)).toBeDefined()
-    expect(screen.getByText('Test User')).toBeDefined()
+    expect(screen.getByText(/added by Creator User/)).toBeDefined()
+
+    expect(screen.queryByRole('button', { name: 'like' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'remove' })).toBeNull()
   })
 
-  test('5.15: calls event handler twice when like button is clicked twice', async () => {
-    const mockLikeHandler = vi.fn()
+  test('renders only like button for logged in user who is not the creator', () => {
+    const otherUser = {
+      username: 'otheruser',
+      name: 'Other User'
+    }
 
-    render(<Blog blog={sampleBlog} handleLike={mockLikeHandler} />)
+    render(
+      <MemoryRouter>
+        <Blog blog={sampleBlog} currentUser={otherUser} />
+      </MemoryRouter>
+    )
 
-    const user = userEvent.setup()
-    const viewButton = screen.getByText('view')
-    await user.click(viewButton)
+    expect(screen.getByRole('button', { name: 'like' })).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'remove' })).toBeNull()
+  })
 
-    const likeButton = screen.getByText('like')
-    await user.click(likeButton)
-    await user.click(likeButton)
+  test('renders both like and remove buttons for the blog creator', () => {
+    const creatorUser = {
+      username: 'creatoruser',
+      name: 'Creator User'
+    }
 
-    expect(mockLikeHandler.mock.calls).toHaveLength(2)
+    render(
+      <MemoryRouter>
+        <Blog blog={sampleBlog} currentUser={creatorUser} />
+      </MemoryRouter>
+    )
+
+    expect(screen.getByRole('button', { name: 'like' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'remove' })).toBeDefined()
   })
 })

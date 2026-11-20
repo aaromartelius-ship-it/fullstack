@@ -1,43 +1,43 @@
-import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
-const Blog = ({ blog, handleLike, handleDelete, currentUser }) => {
-  const [showDetails, setShowDetails] = useState(false)
+const Blog = ({ blog, currentUser, handleLike, handleDelete }) => {
+  const navigate = useNavigate()
 
-  const blogStyle = {
-    paddingTop: 10,
-    paddingLeft: 2,
-    border: 'solid',
-    borderWidth: 1,
-    marginBottom: 5
+  if (!blog) {
+    return null
   }
 
-  const toggleDetails = () => {
-    setShowDetails(!showDetails)
-  }
+  const isCreator =
+    currentUser &&
+    blog.user &&
+    (blog.user.username === currentUser.username || blog.user === currentUser.id)
 
-  const isOwner = blog.user && currentUser && blog.user.username === currentUser.username
+  const onRemove = async () => {
+    const deleted = await handleDelete(blog)
+    if (deleted) {
+      navigate('/')
+    }
+  }
 
   return (
-    <div style={blogStyle} className="blog">
+    <div className="blog">
+      <h2>
+        {blog.title} {blog.author}
+      </h2>
       <div>
-        {blog.title} {blog.author}{' '}
-        <button onClick={toggleDetails}>
-          {showDetails ? 'hide' : 'view'}
-        </button>
+        <a href={blog.url}>{blog.url}</a>
       </div>
-
-      {showDetails && (
-        <div>
-          <div>{blog.url}</div>
-          <div>
-            likes {blog.likes}{' '}
-            <button onClick={() => handleLike(blog)}>like</button>
-          </div>
-          <div>{blog.user ? blog.user.name : ''}</div>
-          {isOwner && (
-            <button onClick={() => handleDelete(blog)}>remove</button>
-          )}
-        </div>
+      <div>
+        likes {blog.likes}{' '}
+        {currentUser && (
+          <button onClick={() => handleLike(blog)}>like</button>
+        )}
+      </div>
+      <div>added by {blog.user ? blog.user.name : 'unknown'}</div>
+      {isCreator && (
+        <button onClick={onRemove} style={{ marginTop: 8 }}>
+          remove
+        </button>
       )}
     </div>
   )

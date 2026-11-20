@@ -1,27 +1,31 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 const BlogForm = ({ createBlog }) => {
   const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
   const [url, setUrl] = useState('')
+  const navigate = useNavigate()
 
-  const addBlog = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
-    createBlog({
+    const success = await createBlog({
       title,
       author,
       url
     })
-
-    setTitle('')
-    setAuthor('')
-    setUrl('')
+    if (success) {
+      setTitle('')
+      setAuthor('')
+      setUrl('')
+      navigate('/')
+    }
   }
 
   return (
     <div>
       <h2>create new</h2>
-      <form onSubmit={addBlog}>
+      <form onSubmit={handleSubmit}>
         <div>
           title:
           <input
