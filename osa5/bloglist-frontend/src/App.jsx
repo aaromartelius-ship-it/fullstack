@@ -6,6 +6,14 @@ import BlogForm from './components/BlogForm'
 import LoginForm from './components/LoginForm'
 import blogService from './services/blogs'
 import loginService from './services/login'
+import {
+  Page,
+  Navigation,
+  NavLink,
+  NavRight,
+  Button,
+  BlogListItem
+} from './components/StyledElements'
 
 const App = () => {
   const [blogs, setBlogs] = useState([])
@@ -120,38 +128,24 @@ const App = () => {
 
   const sortedBlogs = [...blogs].sort((a, b) => b.likes - a.likes)
 
-  const navStyle = {
-    backgroundColor: '#e2e8f0',
-    padding: '8px 12px',
-    marginBottom: 16,
-    display: 'flex',
-    gap: 12,
-    alignItems: 'center'
-  }
-
-  const blogItemStyle = {
-    paddingTop: 10,
-    paddingLeft: 4,
-    paddingBottom: 10,
-    border: 'solid',
-    borderWidth: 1,
-    marginBottom: 5
-  }
-
   return (
-    <div>
-      <nav style={navStyle}>
-        <Link to="/">blogs</Link>
+    <Page>
+      <Navigation>
+        <NavLink to="/">blogs</NavLink>
         {user ? (
           <>
-            <Link to="/create">create new</Link>
-            <span>{user.name} logged in</span>
-            <button onClick={handleLogout}>logout</button>
+            <NavLink to="/create">create new</NavLink>
+            <NavRight>
+              <span>{user.name} logged in</span>
+              <Button onClick={handleLogout}>logout</Button>
+            </NavRight>
           </>
         ) : (
-          <Link to="/login">login</Link>
+          <NavRight>
+            <NavLink to="/login">login</NavLink>
+          </NavRight>
         )}
-      </nav>
+      </Navigation>
 
       <h2>blog app</h2>
       <Notification notification={notification} />
@@ -162,11 +156,11 @@ const App = () => {
           element={
             <div>
               {sortedBlogs.map(blog => (
-                <div key={blog.id} style={blogItemStyle} className="blog-list-item">
+                <BlogListItem key={blog.id} className="blog-list-item">
                   <Link to={`/blogs/${blog.id}`}>
                     {blog.title} {blog.author}
                   </Link>
-                </div>
+                </BlogListItem>
               ))}
             </div>
           }
@@ -191,7 +185,7 @@ const App = () => {
           element={<LoginForm onLogin={handleLogin} />}
         />
       </Routes>
-    </div>
+    </Page>
   )
 }
 

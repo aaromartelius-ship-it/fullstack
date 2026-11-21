@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { BlogCard, LikesRow, Button } from './StyledElements'
 
 const Blog = ({ blog, currentUser, handleLike, handleDelete }) => {
   const navigate = useNavigate()
@@ -20,26 +21,28 @@ const Blog = ({ blog, currentUser, handleLike, handleDelete }) => {
   }
 
   return (
-    <div className="blog">
+    <BlogCard className="blog">
       <h2>
-        {blog.title} {blog.author}
+        {blog.title} — {blog.author}
       </h2>
       <div>
-        <a href={blog.url}>{blog.url}</a>
+        <a href={blog.url} target="_blank" rel="noreferrer">
+          {blog.url}
+        </a>
       </div>
-      <div>
-        likes {blog.likes}{' '}
+      <LikesRow>
+        <span>likes {blog.likes}</span>
         {currentUser && (
-          <button onClick={() => handleLike(blog)}>like</button>
+          <Button onClick={() => handleLike(blog)}>like</Button>
         )}
-      </div>
+      </LikesRow>
       <div>added by {blog.user ? blog.user.name : 'unknown'}</div>
       {isCreator && (
-        <button onClick={onRemove} style={{ marginTop: 8 }}>
+        <Button $danger onClick={onRemove}>
           remove
-        </button>
+        </Button>
       )}
-    </div>
+    </BlogCard>
   )
 }
 
